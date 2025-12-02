@@ -1,0 +1,101 @@
+{
+    "numeric_drift": {
+        "Gender": {
+            "p_value": 1.1109535844335557e-193,
+            "drift": 1
+        },
+        "SeniorCitizen": {
+            "p_value": 0.0,
+            "drift": 1
+        },
+        "Partner": {
+            "p_value": 2.913541336506867e-184,
+            "drift": 1
+        },
+        "Dependents": {
+            "p_value": 2.321769512119997e-72,
+            "drift": 1
+        },
+        "Tenure": {
+            "p_value": 4.372432189455936e-39,
+            "drift": 1
+        },
+        "PhoneService": {
+            "p_value": 0.0,
+            "drift": 1
+        },
+        "MultipleLines": {
+            "p_value": 1.3572692992783805e-219,
+            "drift": 1
+        },
+        "OnlineSecurity": {
+            "p_value": 2.66798565213664e-201,
+            "drift": 1
+        },
+        "OnlineBackup": {
+            "p_value": 1.8363133954136524e-248,
+            "drift": 1
+        },
+        "DeviceProtection": {
+            "p_value": 9.326150408245782e-252,
+            "drift": 1
+        },
+        "TechSupport": {
+            "p_value": 4.49221893571797e-201,
+            "drift": 1
+        },
+        "StreamingTV": {
+            "p_value": 1.963248835557844e-299,
+            "drift": 1
+        },
+        "StreamingMovies": {
+            "p_value": 3.8584504024810715e-291,
+            "drift": 1
+        },
+        "PaperlessBilling": {
+            "p_value": 8.55314630482994e-273,
+            "drift": 1
+        },
+        "MonthlyCharges": {
+            "p_value": 3.0156337401788213e-37,
+            "drift": 1
+        },
+        "TotalCharges": {
+            "p_value": 0.002345763842674214,
+            "drift": 1
+        },
+        "Churn": {
+            "p_value": 3.442954607077352e-57,
+            "drift": 1
+        },
+        "InternetService_Fiber_optic": {
+            "p_value": 9.917971817424847e-152,
+            "drift": 1
+        },
+        "InternetService_No": {
+            "p_value": 2.783287845130197e-39,
+            "drift": 1
+        },
+        "Contract_One_year": {
+            "p_value": 2.9800551364478683e-34,
+            "drift": 1
+        },
+        "Contract_Two_year": {
+            "p_value": 2.347986966257064e-46,
+            "drift": 1
+        },
+        "PaymentMethod_Credit_card_(automatic)": {
+            "p_value": 1.0753610936255187e-38,
+            "drift": 1
+        },
+        "PaymentMethod_Electronic_check": {
+            "p_value": 1.8580624587517906e-88,
+            "drift": 1
+        },
+        "PaymentMethod_Mailed_check": {
+            "p_value": 1.4365031536040246e-40,
+            "drift": 1
+        }
+    },
+    "categorical_drift": {}
+}

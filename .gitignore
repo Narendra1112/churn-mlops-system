@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Airflow runtime
+airflow/logs/
+airflow/airflow.db
+airflow/*.pid
+
+# MLflow experiment history
+mlruns/
+mlflow/
+
+# Data (ignore everything except raw dataset)
+data/*
+!data/telco_churn.csv
+
+# Docker
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

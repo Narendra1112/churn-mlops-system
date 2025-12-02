@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+
+  # FastAPI metrics
+  - job_name: "churn_api"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["churn_api:8000"]
+
+  # Streamlit (optional — no metrics)
+  - job_name: "streamlit"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["churn_streamlit:8501"]
+
+  # 🌟 cAdvisor for container resource monitoring
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
