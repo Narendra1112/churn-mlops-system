@@ -2,14 +2,7 @@ import os
 import streamlit as st
 import requests
 
-# ------------------------------------------------------------------
-# API base URL
-# - If running Streamlit locally: defaults to http://localhost:8000
-# - If running Streamlit in Docker: set API_BASE=http://churn_api:8000
-#   in the streamlit service environment in docker-compose.
-# ------------------------------------------------------------------
-API_BASE = os.getenv("API_BASE", "http://localhost:8000")
-API_URL = f"{API_BASE}/predict"
+API_URL =  "https://churn-mlops-system.onrender.com/predict"
 
 st.set_page_config(page_title="Churn Prediction Dashboard", layout="centered")
 
@@ -36,7 +29,7 @@ PaperlessBilling = st.selectbox("Paperless Billing", ["Yes", "No"])
 MultipleLines = st.selectbox("Multiple Lines", ["Yes", "No"])
 OnlineBackup = st.selectbox("Online Backup", ["Yes", "No"])
 
-# Prepare payload
+# Prepare payload – matches FastAPI request model
 payload = {
     "MonthlyCharges": MonthlyCharges,
     "Tenure": Tenure,
@@ -53,18 +46,42 @@ st.caption(f"Using API at: {API_URL}")
 
 if st.button("Predict Churn"):
     try:
-        res = requests.post(API_URL, json=payload, timeout=10)
+        res = requests.post(API_URL, json=payload, timeout=20)
+
         if res.status_code == 200:
             output = res.json()
-            pred = output["prediction"]
-            prob = output["probability_percent"]
+
+            # Try to read probability from either key
+            prob = output.get("probability_percent") or output.get("churn_probability")
+
+            raw_pred = output.get("prediction")
+
+            # Normalize prediction: handle 0/1 or string labels
+            is_churn = False
+            if isinstance(raw_pred, (int, float)):
+                is_churn = int(raw_pred) == 1
+            elif isinstance(raw_pred, str):
+                label = raw_pred.lower()
+                is_churn = label in ("churn", "yes", "will churn", "customer is likely to churn")
 
             st.subheader("Prediction Result")
-            if pred == 1:
-                st.error(f"Customer WILL CHURN (Probability: {prob}%)")
+
+            if is_churn:
+                if prob is not None:
+                    st.error(f"Customer WILL CHURN (Probability: {prob}%)")
+                else:
+                    st.error("Customer WILL CHURN")
             else:
-                st.success(f"Customer WILL NOT CHURN (Probability: {prob}%)")
+                if prob is not None:
+                    st.success(f"Customer WILL NOT CHURN (Probability: {prob}%)")
+                else:
+                    st.success("Customer WILL NOT CHURN")
+
+            # Optional: show raw response for debugging
+            # st.json(output)
+
         else:
             st.error(f"API returned status {res.status_code}: {res.text}")
+
     except Exception as e:
         st.error(f"Error connecting to API: {e}")
