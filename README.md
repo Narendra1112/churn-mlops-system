@@ -99,11 +99,19 @@ The dataset was cleaned and preprocessed to handle missing values and encode cat
 ##  Run Locally
 
 git clone https://github.com/Narendra1112/churn-mlops-system.git
-cd churn-prediction-api
+cd churn-mlops-system
+**Install dependencies**
 pip install -r requirements.txt
-uvicorn app.main:app --reload
-streamlit run Streamlit_app.py
+**Start FastAPI backend**
+uvicorn api.app:app --reload
+**Start Streamlit UI**
+streamlit run streamlit/app.py
+**Start monitoring stack (FastAPI + Prometheus + Grafana)**
 docker-compose up -d
+**Optional: Enable automated daily retraining (Airflow)**
+docker-compose -f docker-compose-airflow.yml up -d
+**Optional: Start MLflow experiment tracking**
+mlflow ui --backend-store-uri mlruns --host 0.0.0.0 --port 5000
 
 
 # API Example
@@ -111,8 +119,8 @@ docker-compose up -d
 ## Input
 
 {
-  "MonthlyCharges": 75.0,
-  "Tenure": 5,
+  "MonthlyCharges": 25.0,
+  "Tenure": 25,
   "TotalCharges": 500.0,
   "Contract": "Month-to-month",
   "InternetService": "DSL",
@@ -126,8 +134,8 @@ docker-compose up -d
 ## Output
 
 {
-  "prediction": "Customer is likely to churn",
-  "churn_probability": 0.519
+  "prediction": 1,
+  probability_percent": 74.25
 }
 
 ## Monitoring Views
@@ -144,10 +152,10 @@ Prometheus: http://localhost:9090
 Grafana: http://localhost:3000
 ![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Grafana.png)
 
-Airflow: http://localhost:3000
+Airflow: http://localhost:8080
 ![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Airflow.png)
 
-Mlflow: http://localhost:3000
+Mlflow: http://localhost:5000
 ![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Mlflow.png)
 
 
