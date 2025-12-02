@@ -21,7 +21,7 @@ API-level metrics via Prometheus
 Grafana dashboards for latency, throughput, and churn trends
 
 Data drift insights from the drift monitoring module
-![Streamlit App Demo]()
+![Streamlit App Demo](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Streamlit.png)
 
 
 
@@ -98,7 +98,7 @@ The dataset was cleaned and preprocessed to handle missing values and encode cat
 
 ##  Run Locally
 
-git clone https://github.com/Narendra1112/churn-prediction-api.git
+git clone https://github.com/Narendra1112/churn-mlops-system.git
 cd churn-prediction-api
 pip install -r requirements.txt
 uvicorn app.main:app --reload
@@ -133,16 +133,23 @@ docker-compose up -d
 ## Monitoring Views
 
 FastAPI Docs: http://localhost:8000/docs
-![image]()
+![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/FastAPI.png)
 
 Streamlit UI: http://localhost:8501
-![image]()
+![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Streamlit.png)
 
 Prometheus: http://localhost:9090
-![image]()
+![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Prometheus.png)
 
 Grafana: http://localhost:3000
-![image]()
+![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Grafana.png)
+
+Airflow: http://localhost:3000
+![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Airflow.png)
+
+Mlflow: http://localhost:3000
+![image](https://github.com/Narendra1112/churn-mlops-system/blob/main/assests/Mlflow.png)
+
 
 
 ## Key Insights
