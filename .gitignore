@@ -20,7 +20,7 @@ mlflow/
 
 # Data (ignore everything except raw dataset)
 data/*
-!data/telco_churn.csv
+!data/Telecom_processed.csv
 
 # Docker
 *.log

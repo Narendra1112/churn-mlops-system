@@ -8,17 +8,17 @@ from datetime import datetime
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Counter, Histogram
 from loguru import logger
-import dill   # required for loading old pickled models
+import dill  
 
-# ==============================
+
 # PATHS
-# ==============================
+
 MODEL_PATH = "models/xgb_churn_best.pkl"
 PREDICTION_LOG_PATH = "data/prediction_log.csv"
 
-# ==============================
+
 # MODEL AUTO-RELOAD CACHE
-# ==============================
+
 _model_cache = {
     "model": None,
     "mtime": None,
@@ -46,9 +46,9 @@ def load_model():
 
     return model
 
-# ==============================
+
 # FINAL FEATURE LIST (MATCHES TRAINING)
-# ==============================
+
 FEATURES = [
     "Gender", "SeniorCitizen", "Partner", "Dependents", "Tenure",
     "PhoneService", "MultipleLines", "OnlineSecurity", "OnlineBackup",
@@ -61,27 +61,27 @@ FEATURES = [
     "PaymentMethod_Mailed_check"
 ]
 
-# ==============================
+
 # FASTAPI APP
-# ==============================
+
 app = FastAPI(
     title="Customer Churn Prediction API",
     description="FastAPI serving retrained XGBoost model from Airflow",
     version="2.0.0"
 )
 
-# ==============================
+
 # PROMETHEUS
-# ==============================
+
 instrumentator = Instrumentator().instrument(app)
 instrumentator.expose(app)
 
 PRED_COUNT = Counter("churn_predictions_total", "Predictions", ["label"])
 PRED_LATENCY = Histogram("churn_prediction_latency_seconds", "Prediction latency")
 
-# ==============================
+
 # INPUT SCHEMA
-# ==============================
+
 class CustomerInput(BaseModel):
     MonthlyCharges: float
     Tenure: float
@@ -93,9 +93,9 @@ class CustomerInput(BaseModel):
     MultipleLines: str
     OnlineBackup: str
 
-# ==============================
+
 # ENCODING (FINAL FIXED VERSION)
-# ==============================
+
 def encode_raw_input(user: dict) -> pd.DataFrame:
     df = pd.DataFrame([user])
 
@@ -129,9 +129,9 @@ def encode_raw_input(user: dict) -> pd.DataFrame:
 
     return df[FEATURES].astype(float)
 
-# ==============================
+
 # ROUTES
-# ==============================
+
 @app.get("/health")
 def health():
     return {"status": "OK", "message": "FastAPI running with Airflow model"}

@@ -21,12 +21,12 @@ services:
       - "8501:8501"
     depends_on:
       - api
-    environment:  # ← ADD THIS BLOCK
+    environment:  
       - API_BASE=http://churn_api:8000
     networks:
       - monitor-net
 
-  # ---------- NEW cAdvisor ----------
+  
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
