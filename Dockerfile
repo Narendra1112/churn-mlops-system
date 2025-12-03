@@ -1,15 +1,14 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY . /app
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt
 
-COPY api ./api
-COPY models ./models
-COPY data ./data      
+# Render will inject $PORT. We'll use it for Streamlit.
+ENV PORT=10000
 
-EXPOSE 8000
-
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start FastAPI on 8000 (internal), Streamlit on $PORT (public)
+CMD ["sh", "-c", "uvicorn api.app:app --host 0.0.0.0 --port 8000 & streamlit run streamlit/app.py --server.port $PORT --server.address 0.0.0.0"]

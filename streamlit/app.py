@@ -2,7 +2,7 @@ import os
 import streamlit as st
 import requests
 
-API_URL =  "https://churn-mlops-system.onrender.com/predict"
+API_URL =  "https://localhost:8000/predict"
 
 st.set_page_config(page_title="Churn Prediction Dashboard", layout="centered")
 
