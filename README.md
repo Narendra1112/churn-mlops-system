@@ -8,7 +8,7 @@ This project demonstrates how real companies deploy, observe, retrain, and maint
 
 ##  Live Demo
 
-**Deployed Application:** [Try it here on Render](https://churn-mlops-system-1.onrender.com/)  
+**Deployed Application:** [Try it here on Render](https://churn-mlops-system-fyid.onrender.com/)  
 This live web application provides real-time telecom churn prediction using a production-ready pipeline powered by **FastAPI** and **Streamlit**.
 Users can submit customer details, receive instant churn probabilities, and explore:
 
