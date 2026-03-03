@@ -37,6 +37,7 @@ services:
       - ./data:/opt/airflow/data
       - ./mlruns:/opt/airflow/mlruns
       - ./models:/opt/airflow/models
+      - ./monitoring:/opt/airflow/monitoring
     ports:
       - "8080:8080"
     deploy:
@@ -64,6 +65,7 @@ services:
       - ./data:/opt/airflow/data
       - ./mlruns:/opt/airflow/mlruns
       - ./models:/opt/airflow/models
+      - ./monitoring:/opt/airflow/monitoring
     deploy:
       resources:
         limits:
@@ -74,4 +76,10 @@ services:
     command: airflow scheduler
 
 volumes:
+  churn_models:
+    external: true
+    name: churn_mlops_churn_models
+  churn_data:
+    external: true
+    name: churn_mlops_churn_data
   postgres_data:

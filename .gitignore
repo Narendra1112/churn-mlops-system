@@ -1,30 +1,82 @@
+############################################
 # Python
+############################################
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
 
+############################################
 # Virtual environments
+############################################
 venv/
-.env/
+.venv/
+.env
+.env.*
 
+############################################
 # Jupyter
+############################################
 .ipynb_checkpoints/
 
+############################################
 # Airflow runtime
+############################################
 airflow/logs/
 airflow/airflow.db
 airflow/*.pid
 
-# MLflow experiment history
+############################################
+# MLflow
+############################################
 mlruns/
-mlflow/
+**/mlruns/
 
-# Data (ignore everything except raw dataset)
+############################################
+# Runtime logs
+############################################
+logs/
+*.log
+data/prediction_log.jsonl
+
+############################################
+# Load testing artifacts (keep code, ignore results)
+############################################
+loadtest/results/
+loadtest/*.csv
+benchmark_report.md
+
+############################################
+# Drift / monitoring artifacts
+############################################
+monitoring/psi_reports/
+monitoring/baseline/*.csv
+
+############################################
+# Data (keep only processed demo dataset)
+############################################
 data/*
 !data/Telecom_processed.csv
 
-# Docker
-*.log
-
-# OS files
+############################################
+# IDE / OS
+############################################
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
+
+############################################
+# Docker temp
+############################################
+*.pid
+*.sock
+
+############################################
+# Render internal
+############################################
+.render/

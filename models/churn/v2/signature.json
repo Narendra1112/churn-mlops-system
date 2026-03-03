@@ -1,0 +1,28 @@
+{
+  "model_version": "v1",
+  "features": [
+    "Gender",
+    "SeniorCitizen",
+    "Partner",
+    "Dependents",
+    "Tenure",
+    "PhoneService",
+    "MultipleLines",
+    "OnlineSecurity",
+    "OnlineBackup",
+    "DeviceProtection",
+    "TechSupport",
+    "StreamingTV",
+    "StreamingMovies",
+    "PaperlessBilling",
+    "MonthlyCharges",
+    "TotalCharges",
+    "InternetService_Fiber_optic",
+    "InternetService_No",
+    "Contract_One_year",
+    "Contract_Two_year",
+    "PaymentMethod_Credit_card_automatic",
+    "PaymentMethod_Electronic_check",
+    "PaymentMethod_Mailed_check"
+  ]
+}

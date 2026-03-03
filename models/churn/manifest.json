@@ -1,0 +1,13 @@
+{
+  "stable_version": "v1",
+  "candidate_version": "v3",
+  "routing": {
+    "stable": 80,
+    "candidate": 20
+  },
+  "last_candidate_published_utc": "2026-02-21T11:32:20.856256",
+  "candidate_metrics": {
+    "auc": 0.8315960112635303,
+    "f1": 0.6095444685466378
+  }
+}

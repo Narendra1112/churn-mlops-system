@@ -1,0 +1,22 @@
+{
+  "UserId": "u1",
+  "Gender": 0,
+  "SeniorCitizen": 0,
+  "Partner": 0,
+  "Dependents": 0,
+  "PhoneService": 0,
+  "MultipleLines": 0,
+  "OnlineSecurity": 0,
+  "OnlineBackup": 0,
+  "DeviceProtection": 0,
+  "TechSupport": 0,
+  "StreamingTV": 0,
+  "StreamingMovies": 0,
+  "PaperlessBilling": 0,
+  "Tenure": 12,
+  "MonthlyCharges": 70.0,
+  "TotalCharges": 1500.0,
+  "Contract": "Month-to-month",
+  "InternetService": "DSL",
+  "PaymentMethod": "Credit card (automatic)"
+}

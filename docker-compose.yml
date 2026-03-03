@@ -1,7 +1,6 @@
 version: "3.9"
 
 services:
-
   api:
     build:
       context: .
@@ -9,6 +8,26 @@ services:
     container_name: churn_api
     ports:
       - "8000:8000"
+    environment:
+      - MAX_INFLIGHT_INFERENCES=32
+      - INFERENCE_QUEUE_TIMEOUT_S=1
+      - INFERENCE_TIMEOUT_S=2
+      - PREDICT_WORKERS=16
+    # ✅ Use repo bind mounts so Airflow + API see the same artifacts
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./monitoring:/app/monitoring
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).read(); print('ok')\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
     networks:
       - monitor-net
 
@@ -20,13 +39,13 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      - api
-    environment:  
-      - API_BASE=http://churn_api:8000
+      api:
+        condition: service_healthy
+    environment:
+      - API_BASE=http://api:8000
     networks:
       - monitor-net
 
-  
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
@@ -44,12 +63,14 @@ services:
     image: prom/prometheus:latest
     container_name: churn_prometheus
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
     depends_on:
-      - api
-      - cadvisor
+      api:
+        condition: service_healthy
+      cadvisor:
+        condition: service_started
     networks:
       - monitor-net
 
@@ -59,7 +80,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_started
     volumes:
       - grafana_data:/var/lib/grafana
     networks:

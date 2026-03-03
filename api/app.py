@@ -1,175 +1,410 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-import pandas as pd
-import time
-import joblib
+from __future__ import annotations
+
+import hashlib
+import json
 import os
-from datetime import datetime
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Counter, Histogram
+import random
+import time
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional, Tuple
+
+import pandas as pd
+import xgboost as xgb
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from loguru import logger
-import dill  
+from pydantic import BaseModel, Field
+from prometheus_client import Counter, Gauge, Histogram
+from prometheus_fastapi_instrumentator import Instrumentator
+
+from api.concurrency import BackpressureError, inference_slot
+from api.inference_runtime import run_predict_threadpool
+from api.timeouts import InferenceTimeoutError, with_inference_timeout
+
+# -------------------------
+# CONSTANTS / PATHS
+# -------------------------
+
+PREDICTION_LOG_PATH = os.getenv("PREDICTION_LOG_PATH", "data/prediction_log.jsonl")
+MANIFEST_PATH = os.getenv("MANIFEST_PATH", "models/churn/manifest.json")
+
+# If you expose MAX_INFLIGHT in api.concurrency, keep this consistent.
+MAX_INFLIGHT = int(os.getenv("MAX_INFLIGHT", "32"))
+
+# -------------------------
+# FASTAPI
+# -------------------------
+
+app = FastAPI(title="Customer Churn API", version="6.1.0")
+
+# Expose standard HTTP metrics at /metrics (DO NOT implement /metrics yourself again)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+# -------------------------
+# PROMETHEUS METRICS (MODEL-AWARE)
+# -------------------------
+
+# Routing + prediction volume
+PRED_COUNT = Counter(
+    "churn_predictions_total",
+    "Predictions emitted by model",
+    ["label", "model_version"],
+)
+
+ROUTE_COUNT = Counter(
+    "churn_routing_total",
+    "Routing decisions",
+    ["model_version", "route"],  # route=stable|candidate
+)
+
+# Latency: separate API total vs inference compute
+API_LATENCY = Histogram(
+    "churn_api_latency_seconds",
+    "End-to-end /predict request latency (includes validation, encoding, model load, inference, logging)",
+    ["model_version"],
+)
+
+INFER_LATENCY = Histogram(
+    "churn_inference_latency_seconds",
+    "Model inference compute latency only (predict_proba execution)",
+    ["model_version"],
+)
+
+# Saturation
+INFLIGHT = Gauge(
+    "churn_inflight_requests",
+    "Current in-flight inference requests (bounded by MAX_INFLIGHT)",
+)
+
+# Explicit error counters for dashboards (no guessing from status families)
+OVERLOAD_429 = Counter(
+    "churn_overload_rejections_total",
+    "Requests rejected due to backpressure / overload (HTTP 429)",
+    ["model_version"],
+)
+
+TIMEOUT_504 = Counter(
+    "churn_inference_timeouts_total",
+    "Requests failed due to inference timeout (HTTP 504)",
+    ["model_version"],
+)
+
+ERROR_500 = Counter(
+    "churn_internal_errors_total",
+    "Internal server errors (HTTP 500) during prediction path",
+    ["model_version", "stage"],  # bounded: artifact_load|inference|unknown
+)
+
+VALIDATION_400 = Counter(
+    "churn_validation_errors_total",
+    "Input validation errors that return HTTP 400",
+    ["model_version", "field"],  # bounded: Contract|InternetService|PaymentMethod
+)
+
+# Optional: drift visibility (values should be set by drift job/script)
+# Keep these even if you don't set yet—Grafana panels can exist.
+PSI_OVERALL = Gauge(
+    "churn_psi_overall",
+    "Overall PSI drift score for a model version vs baseline",
+    ["model_version"],
+)
+PSI_FEATURE = Gauge(
+    "churn_psi_feature",
+    "Per-feature PSI drift score for a model version vs baseline",
+    ["model_version", "feature"],  # bounded list of features only
+)
+PSI_BREACH = Gauge(
+    "churn_psi_breach",
+    "Drift breach flag (1=breach, 0=ok)",
+    ["model_version"],
+)
+
+# -------------------------
+# MODEL / SIGNATURE / MANIFEST CACHES
+# -------------------------
+
+_manifest_cache: Dict[str, Any] = {"obj": None, "mtime": None}
+_signature_cache: Dict[str, Dict[str, Any]] = {}  # version -> {"features": [...], "mtime": ...}
+_model_cache: Dict[str, Dict[str, Any]] = {}      # version -> {"model": model, "mtime": ...}
 
 
-# PATHS
-
-MODEL_PATH = "models/xgb_churn_best.pkl"
-PREDICTION_LOG_PATH = "data/prediction_log.csv"
+def model_path(version: str) -> str:
+    return f"models/churn/{version}/model.json"
 
 
-# MODEL AUTO-RELOAD CACHE
+def signature_path(version: str) -> str:
+    return f"models/churn/{version}/signature.json"
 
-_model_cache = {
-    "model": None,
-    "mtime": None,
-}
 
-def load_model():
-    """Reload the model ONLY if the file changed on disk."""
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"Model file missing: {MODEL_PATH}")
+def load_manifest() -> Dict[str, Any]:
+    if not os.path.exists(MANIFEST_PATH):
+        raise FileNotFoundError(f"Manifest missing: {MANIFEST_PATH}")
 
-    current_mtime = os.path.getmtime(MODEL_PATH)
+    mtime = os.path.getmtime(MANIFEST_PATH)
+    if _manifest_cache["obj"] is not None and _manifest_cache["mtime"] == mtime:
+        return _manifest_cache["obj"]
 
-    # Use cache if unchanged
-    if _model_cache["model"] and _model_cache["mtime"] == current_mtime:
-        return _model_cache["model"]
+    with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+        obj = json.load(f)
 
-    logger.info("Reloading latest model...")
+    _manifest_cache["obj"] = obj
+    _manifest_cache["mtime"] = mtime
+    return obj
 
-    # Load with dill compatibility
-    model = joblib.load(MODEL_PATH)
 
-    _model_cache["model"] = model
-    _model_cache["mtime"] = current_mtime
-    logger.info("Model loaded")
+def load_signature_for_version(version: str) -> list[str]:
+    path = signature_path(version)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Signature missing: {path}")
 
+    mtime = os.path.getmtime(path)
+    cached = _signature_cache.get(version)
+    if cached and cached["mtime"] == mtime:
+        return cached["features"]
+
+    with open(path, "r", encoding="utf-8") as f:
+        obj = json.load(f)
+
+    features = obj["features"]
+    _signature_cache[version] = {"features": features, "mtime": mtime}
+    return features
+
+
+def load_model_for_version(version: str) -> xgb.XGBClassifier:
+    path = model_path(version)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Model file missing: {path}")
+
+    mtime = os.path.getmtime(path)
+    cached = _model_cache.get(version)
+    if cached and cached["mtime"] == mtime:
+        return cached["model"]
+
+    logger.info(f"Loading model version: {version}")
+    model = xgb.XGBClassifier()
+    model.load_model(path)
+
+    _model_cache[version] = {"model": model, "mtime": mtime}
     return model
 
 
-# FINAL FEATURE LIST (MATCHES TRAINING)
+# -------------------------
+# ROUTING (DETERMINISTIC)
+# -------------------------
 
-FEATURES = [
-    "Gender", "SeniorCitizen", "Partner", "Dependents", "Tenure",
-    "PhoneService", "MultipleLines", "OnlineSecurity", "OnlineBackup",
-    "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies",
-    "PaperlessBilling", "MonthlyCharges", "TotalCharges",
-    "InternetService_Fiber_optic", "InternetService_No",
-    "Contract_One_year", "Contract_Two_year",
-    "PaymentMethod_Credit_card_(automatic)",
-    "PaymentMethod_Electronic_check",
-    "PaymentMethod_Mailed_check"
+def _stable_bucket(user_key: str) -> int:
+    digest = hashlib.sha256(user_key.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 100  # 0..99
+
+
+def pick_version_and_route(user_key: Optional[str]) -> Tuple[str, str]:
+    m = load_manifest()
+    stable = m["stable_version"]
+    cand = m.get("candidate_version")
+    routing = m.get("routing", {"stable": 100, "candidate": 0})
+    cand_pct = int(routing.get("candidate", 0))
+
+    if not cand or cand_pct <= 0:
+        return stable, "stable"
+
+    if user_key:
+        bucket = _stable_bucket(user_key) 
+    else:
+        bucket = random.randint(1, 100)
+
+    if bucket <= cand_pct:
+        return cand, "candidate"
+    return stable, "stable"
+
+
+# -------------------------
+# VALID CATEGORY GUARDS
+# -------------------------
+
+VALID_CONTRACTS = ["Month-to-month", "One year", "Two year"]
+VALID_INTERNET = ["DSL", "Fiber optic", "No"]
+VALID_PAYMENT = [
+    "Credit card (automatic)",
+    "Electronic check",
+    "Mailed check",
+    "Bank transfer (automatic)",
 ]
 
 
-# FASTAPI APP
-
-app = FastAPI(
-    title="Customer Churn Prediction API",
-    description="FastAPI serving retrained XGBoost model from Airflow",
-    version="2.0.0"
-)
-
-
-# PROMETHEUS
-
-instrumentator = Instrumentator().instrument(app)
-instrumentator.expose(app)
-
-PRED_COUNT = Counter("churn_predictions_total", "Predictions", ["label"])
-PRED_LATENCY = Histogram("churn_prediction_latency_seconds", "Prediction latency")
-
-
+# -------------------------
 # INPUT SCHEMA
+# -------------------------
 
 class CustomerInput(BaseModel):
-    MonthlyCharges: float
+    UserId: Optional[str] = Field(default=None, description="Optional routing key for deterministic canary")
+    Gender: int
+    SeniorCitizen: int
+    Partner: int
+    Dependents: int
     Tenure: float
+    PhoneService: int
+    MultipleLines: int
+    OnlineSecurity: int
+    OnlineBackup: int
+    DeviceProtection: int
+    TechSupport: int
+    StreamingTV: int
+    StreamingMovies: int
+    PaperlessBilling: int
+    MonthlyCharges: float
     TotalCharges: float
     Contract: str
     InternetService: str
     PaymentMethod: str
-    PaperlessBilling: str
-    MultipleLines: str
-    OnlineBackup: str
 
 
-# ENCODING (FINAL FIXED VERSION)
+# -------------------------
+# ENCODING (MATCH TRAINING CONTRACT)
+# -------------------------
 
-def encode_raw_input(user: dict) -> pd.DataFrame:
+def encode_raw_input(user: Dict[str, Any], features: list[str], model_version: str) -> pd.DataFrame:
+    if user["Contract"] not in VALID_CONTRACTS:
+        VALIDATION_400.labels(model_version=model_version, field="Contract").inc()
+        raise HTTPException(status_code=400, detail="Invalid Contract")
+
+    if user["InternetService"] not in VALID_INTERNET:
+        VALIDATION_400.labels(model_version=model_version, field="InternetService").inc()
+        raise HTTPException(status_code=400, detail="Invalid InternetService")
+
+    if user["PaymentMethod"] not in VALID_PAYMENT:
+        VALIDATION_400.labels(model_version=model_version, field="PaymentMethod").inc()
+        raise HTTPException(status_code=400, detail="Invalid PaymentMethod")
+
     df = pd.DataFrame([user])
 
-    # Contract encoding
+    if "UserId" in df.columns:
+        df.drop(columns=["UserId"], inplace=True)
+
+    # One-hot: Contract
     df["Contract_One_year"] = (df["Contract"] == "One year").astype(int)
     df["Contract_Two_year"] = (df["Contract"] == "Two year").astype(int)
     df.drop(columns=["Contract"], inplace=True)
 
-    # InternetService encoding
+    # One-hot: InternetService
     df["InternetService_Fiber_optic"] = (df["InternetService"] == "Fiber optic").astype(int)
     df["InternetService_No"] = (df["InternetService"] == "No").astype(int)
     df.drop(columns=["InternetService"], inplace=True)
 
-    # Payment Method (MATCHES model exactly)
+    # One-hot: PaymentMethod
+    df["PaymentMethod_Credit_card_automatic"] = (df["PaymentMethod"] == "Credit card (automatic)").astype(int)
     df["PaymentMethod_Electronic_check"] = (df["PaymentMethod"] == "Electronic check").astype(int)
     df["PaymentMethod_Mailed_check"] = (df["PaymentMethod"] == "Mailed check").astype(int)
-    df["PaymentMethod_Credit_card_(automatic)"] = (
-        df["PaymentMethod"] == "Credit card (automatic)"
-    ).astype(int)
     df.drop(columns=["PaymentMethod"], inplace=True)
 
-    # Binary fields
-    df["PaperlessBilling"] = df["PaperlessBilling"].map({"Yes": 1, "No": 0})
-    df["MultipleLines"] = df["MultipleLines"].map({"Yes": 1, "No": 0})
-    df["OnlineBackup"] = df["OnlineBackup"].map({"Yes": 1, "No": 0})
-
-    # Ensure all features exist
-    for col in FEATURES:
+    for col in features:
         if col not in df:
             df[col] = 0
 
-    return df[FEATURES].astype(float)
+    return df[features].astype(float)
 
 
+# -------------------------
 # ROUTES
+# -------------------------
 
 @app.get("/health")
 def health():
-    return {"status": "OK", "message": "FastAPI running with Airflow model"}
+    m = load_manifest()
+    return {
+        "status": "OK",
+        "stable_version": m.get("stable_version"),
+        "candidate_version": m.get("candidate_version"),
+        "routing": m.get("routing", {"stable": 100, "candidate": 0}),
+    }
+
+
+@app.get("/manifest")
+def manifest():
+    try:
+        m = load_manifest()
+        return JSONResponse(content=m)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load manifest: {e}")
+
 
 @app.post("/predict")
-def predict(data: CustomerInput):
-    start = time.time()
-
-    model = load_model()
+async def predict(data: CustomerInput):
+    t0 = time.perf_counter()
     payload = data.dict()
-    input_df = encode_raw_input(payload)
 
-    # Predict
-    prob = float(model.predict_proba(input_df)[0][1])
-    label = int(prob >= 0.5)
-    label_str = "churn" if label == 1 else "no_churn"
+    version: Optional[str] = None
+    try:
+        version, route = pick_version_and_route(payload.get("UserId"))
+        ROUTE_COUNT.labels(model_version=version, route=route).inc()
 
-    # Prometheus metrics
-    PRED_COUNT.labels(label=label_str).inc()
-    PRED_LATENCY.observe(time.time() - start)
+        async def _do_inference():
+            # Acquire bounded concurrency slot (may raise BackpressureError)
+            async with inference_slot():
+                INFLIGHT.inc()
+                try:
+                    model = load_model_for_version(version)
+                    features = load_signature_for_version(version)
+                    input_df = encode_raw_input(payload, features, model_version=version)
 
-    # Drift logging
-    record = payload.copy()
-    record["prediction"] = label
-    record["probability"] = prob
-    record["timestamp"] = datetime.utcnow().isoformat()
+                    # Pure inference compute timing
+                    t_inf0 = time.perf_counter()
+                    proba = await run_predict_threadpool(lambda: model.predict_proba(input_df))
+                    INFER_LATENCY.labels(model_version=version).observe(time.perf_counter() - t_inf0)
 
-    os.makedirs("data", exist_ok=True)
-    header_needed = not os.path.exists(PREDICTION_LOG_PATH)
+                    prob = float(proba[0][1])
+                    label = int(prob >= 0.5)
+                    label_str = "churn" if label == 1 else "no_churn"
+                    PRED_COUNT.labels(label=label_str, model_version=version).inc()
 
-    pd.DataFrame([record]).to_csv(
-        PREDICTION_LOG_PATH,
-        mode="a",
-        index=False,
-        header=header_needed
-    )
+                    # Write log (JSONL)
+                    record = payload.copy()
+                    encoded = input_df.iloc[0].to_dict()
+                    for feat_name, feat_val in encoded.items():
+                        record[feat_name] = float(feat_val)
 
-    return {
-        "prediction": label,
-        "probability_percent": round(prob * 100, 2)
-    }
+                    record["prediction"] = label
+                    record["probability"] = prob
+                    record["model_version"] = version
+                    record["timestamp"] = datetime.now(timezone.utc).isoformat()
+
+                    os.makedirs("data", exist_ok=True)
+                    with open(PREDICTION_LOG_PATH, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(record) + "\n")
+
+                    return {
+                        "prediction": label,
+                        "probability_percent": round(prob * 100, 2),
+                        "model_version": version,
+                    }
+                finally:
+                    INFLIGHT.dec()
+
+        try:
+            return await with_inference_timeout(_do_inference())
+
+        except BackpressureError:
+            OVERLOAD_429.labels(model_version=version or "unknown").inc()
+            raise HTTPException(status_code=429, detail="Too many in-flight inferences")
+
+        except InferenceTimeoutError:
+            TIMEOUT_504.labels(model_version=version or "unknown").inc()
+            raise HTTPException(status_code=504, detail="Inference timed out")
+
+    except HTTPException:
+        # validation errors are already counted via VALIDATION_400
+        raise
+
+    except FileNotFoundError:
+        ERROR_500.labels(model_version=version or "unknown", stage="artifact_load").inc()
+        raise HTTPException(status_code=500, detail="Model artifacts missing")
+
+    except Exception as e:
+        ERROR_500.labels(model_version=version or "unknown", stage="inference").inc()
+        logger.exception(f"Prediction failed: {e}")
+        raise HTTPException(status_code=500, detail="Prediction failed")
+
+    finally:
+        if version:
+            API_LATENCY.labels(model_version=version).observe(time.perf_counter() - t0)
