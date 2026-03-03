@@ -6,10 +6,11 @@ This directory contains Locust-based load testing for the `/predict` endpoint.
 
 ## Target
 
-Default target:
-http://127.0.0.1:8000
+Default target: http://127.0.0.1:8000
 
 Make sure the API is running before executing tests.
+
+For deployed environments, update the target host inside locustfile.py or use the --host flag.
 
 ```bash
 uvicorn api.app:app --reload
@@ -39,6 +40,12 @@ set PAYLOAD_PATH=path\to\custom_payload.json
 
 ---
 
+
+### Note 
+
+All CSV outputs are generated locally and ignored via .gitignore.
+Results can be reproduced by running the above commands.
+
 ## Test Scenarios
 
 ### 1️⃣ Baseline Run (Light Load)
@@ -51,7 +58,8 @@ locust -f loadtest/locustfile.py --headless -u 25 -r 5 -t 60s --csv loadtest/res
 - Spawn rate: 5/sec
 - Duration: 60 seconds
 
----
+
+
 
 ### 2️⃣ Target Load
 
@@ -63,7 +71,6 @@ locust -f loadtest/locustfile.py --headless -u 50 -r 10 -t 60s --csv loadtest/re
 - Spawn rate: 10/sec
 - Duration: 60 seconds
 
----
 
 ### 3️⃣ Stress Test
 
@@ -75,7 +82,7 @@ locust -f loadtest/locustfile.py --headless -u 100 -r 20 -t 60s --csv loadtest/r
 - Spawn rate: 20/sec
 - Duration: 60 seconds
 
----
+
 
 ## Output Files
 
@@ -132,18 +139,15 @@ For a local dev machine:
 - Ensure `MAX_INFLIGHT_INFERENCES` is configured correctly.
 - Ensure `INFERENCE_QUEUE_TIMEOUT_S` is set to a small value (e.g., 0.05).
 - Restart API after config changes.
-- Clear background PowerShell jobs before new runs:
-
-```bash
-Get-Job | Remove-Job -Force
-```
+- Values depend on hardware. These numbers were observed on a local dev machine (8-core CPU).
 
 ---
 
-This load test validates:
+## Design Principle
 
-- Concurrency control
-- Backpressure behavior
-- Timeout handling
-- Stability under stress
-- Metrics exposure
+The system is intentionally configured to prefer 429 (controlled backpressure)
+over 504 (timeout under overload), ensuring:
+
+- Predictable failure mode
+- No cascading latency amplification
+- Stable recovery after traffic normalization
