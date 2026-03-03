@@ -41,10 +41,6 @@ set PAYLOAD_PATH=path\to\custom_payload.json
 ---
 
 
-### Note 
-
-All CSV outputs are generated locally and ignored via .gitignore.
-Results can be reproduced by running the above commands.
 
 ## Test Scenarios
 
@@ -82,10 +78,15 @@ locust -f loadtest/locustfile.py --headless -u 100 -r 20 -t 60s --csv loadtest/r
 - Spawn rate: 20/sec
 - Duration: 60 seconds
 
-
+c
 
 ## Output Files
 
+
+### Note 
+
+All CSV outputs are generated locally and ignored via .gitignore.
+Results can be reproduced by running the above commands.
 Each run generates:
 
 - `*_stats.csv`
