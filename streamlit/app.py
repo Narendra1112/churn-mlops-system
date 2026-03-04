@@ -3,7 +3,7 @@ import requests
 import json
 import os
 
-API_BASE = os.getenv("API_BASE", "http://api:8000").rstrip("/")
+API_BASE = os.getenv("API_BASE", "http://127.0.0.1:8000").rstrip("/")
 HEALTH_URL = f"{API_BASE}/health"
 API_URL = f"{API_BASE}/predict"
 
