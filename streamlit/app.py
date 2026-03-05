@@ -31,12 +31,11 @@ with st.expander("API status"):
 st.divider()
 st.subheader("Customer Inputs")
 
-# Optional deterministic routing
+
 user_id = st.text_input("UserId (optional)", value="")
 
 col1, col2 = st.columns(2)
 
-# -------- Human Friendly Inputs -------- #
 
 with col1:
     Gender_label = st.selectbox("Gender", ["Male", "Female"])
@@ -64,14 +63,13 @@ Contract = st.selectbox("Contract", VALID_CONTRACTS)
 InternetService = st.selectbox("Internet Service", VALID_INTERNET)
 PaymentMethod = st.selectbox("Payment Method", VALID_PAYMENT)
 
-# -------- Encoding Layer (UI → Model Contract) -------- #
 
 def yes_no_encode(val):
     return 1 if val == "Yes" else 0
 
 payload = {
     **({"UserId": user_id.strip()} if user_id.strip() else {}),
-    "Gender": 1 if Gender_label == "Female" else 0,  # define explicitly
+    "Gender": 1 if Gender_label == "Female" else 0,  
     "SeniorCitizen": yes_no_encode(Senior_label),
     "Partner": yes_no_encode(Partner_label),
     "Dependents": yes_no_encode(Dependents_label),

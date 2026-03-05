@@ -13,7 +13,6 @@ services:
       - INFERENCE_QUEUE_TIMEOUT_S=1
       - INFERENCE_TIMEOUT_S=2
       - PREDICT_WORKERS=16
-    # ✅ Use repo bind mounts so Airflow + API see the same artifacts
     volumes:
       - ./models:/app/models
       - ./data:/app/data

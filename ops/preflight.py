@@ -38,7 +38,6 @@ def validate_version_dir(version: str):
     must_exist(vdir / "model.json", f"{version}/model.json")
     must_exist(vdir / "signature.json", f"{version}/signature.json")
 
-    # signature sanity
     try:
         with open(vdir / "signature.json", "r", encoding="utf-8") as f:
             sig = json.load(f)
@@ -63,17 +62,14 @@ def main():
         die("manifest missing stable_version")
     ok(f"stable_version: {stable}")
 
-    # stable artifacts
     validate_version_dir(stable)
 
-    # candidate artifacts (if set)
     if cand:
         ok(f"candidate_version: {cand}")
         validate_version_dir(cand)
     else:
         ok("candidate_version: null")
 
-    # routing sanity
     try:
         s = int(routing.get("stable", 0))
         c = int(routing.get("candidate", 0))
@@ -84,13 +80,11 @@ def main():
         die(f"routing must be non-negative and sum to 100. Got: {routing}")
     ok(f"routing: stable={s}, candidate={c}")
 
-    # candidate consistency
     if cand is None and c != 0:
         die("candidate_version is null but routing.candidate != 0 (inconsistent)")
     if cand is not None and c == 0:
         print("[WARN] candidate_version is set but routing.candidate == 0 (candidate will receive no traffic)")
 
-    # prediction log presence (optional)
     if PRED_LOG.exists():
         ok(f"prediction_log.jsonl exists: {PRED_LOG}")
     else:

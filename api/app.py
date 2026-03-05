@@ -21,29 +21,20 @@ from api.concurrency import BackpressureError, inference_slot
 from api.inference_runtime import run_predict_threadpool
 from api.timeouts import InferenceTimeoutError, with_inference_timeout
 
-# -------------------------
 # CONSTANTS / PATHS
-# -------------------------
 
 PREDICTION_LOG_PATH = os.getenv("PREDICTION_LOG_PATH", "data/prediction_log.jsonl")
 MANIFEST_PATH = os.getenv("MANIFEST_PATH", "models/churn/manifest.json")
 
-# If you expose MAX_INFLIGHT in api.concurrency, keep this consistent.
+
 MAX_INFLIGHT = int(os.getenv("MAX_INFLIGHT", "32"))
 
-# -------------------------
 # FASTAPI
-# -------------------------
-
 app = FastAPI(title="Customer Churn API", version="6.1.0")
 
-# Expose standard HTTP metrics at /metrics (DO NOT implement /metrics yourself again)
 Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
-# -------------------------
 # PROMETHEUS METRICS (MODEL-AWARE)
-# -------------------------
-
 # Routing + prediction volume
 PRED_COUNT = Counter(
     "churn_predictions_total",
@@ -54,7 +45,7 @@ PRED_COUNT = Counter(
 ROUTE_COUNT = Counter(
     "churn_routing_total",
     "Routing decisions",
-    ["model_version", "route"],  # route=stable|candidate
+    ["model_version", "route"],  
 )
 
 # Latency: separate API total vs inference compute
@@ -76,7 +67,7 @@ INFLIGHT = Gauge(
     "Current in-flight inference requests (bounded by MAX_INFLIGHT)",
 )
 
-# Explicit error counters for dashboards (no guessing from status families)
+# Explicit error counters for dashboards 
 OVERLOAD_429 = Counter(
     "churn_overload_rejections_total",
     "Requests rejected due to backpressure / overload (HTTP 429)",
@@ -101,7 +92,6 @@ VALIDATION_400 = Counter(
     ["model_version", "field"],  # bounded: Contract|InternetService|PaymentMethod
 )
 
-# Optional: drift visibility (values should be set by drift job/script)
 # Keep these even if you don't set yet—Grafana panels can exist.
 PSI_OVERALL = Gauge(
     "churn_psi_overall",
@@ -111,7 +101,7 @@ PSI_OVERALL = Gauge(
 PSI_FEATURE = Gauge(
     "churn_psi_feature",
     "Per-feature PSI drift score for a model version vs baseline",
-    ["model_version", "feature"],  # bounded list of features only
+    ["model_version", "feature"], 
 )
 PSI_BREACH = Gauge(
     "churn_psi_breach",
@@ -119,9 +109,7 @@ PSI_BREACH = Gauge(
     ["model_version"],
 )
 
-# -------------------------
 # MODEL / SIGNATURE / MANIFEST CACHES
-# -------------------------
 
 _manifest_cache: Dict[str, Any] = {"obj": None, "mtime": None}
 _signature_cache: Dict[str, Dict[str, Any]] = {}  # version -> {"features": [...], "mtime": ...}
@@ -187,10 +175,7 @@ def load_model_for_version(version: str) -> xgb.XGBClassifier:
     _model_cache[version] = {"model": model, "mtime": mtime}
     return model
 
-
-# -------------------------
 # ROUTING (DETERMINISTIC)
-# -------------------------
 
 def _stable_bucket(user_key: str) -> int:
     digest = hashlib.sha256(user_key.encode("utf-8")).hexdigest()
@@ -217,9 +202,7 @@ def pick_version_and_route(user_key: Optional[str]) -> Tuple[str, str]:
     return stable, "stable"
 
 
-# -------------------------
 # VALID CATEGORY GUARDS
-# -------------------------
 
 VALID_CONTRACTS = ["Month-to-month", "One year", "Two year"]
 VALID_INTERNET = ["DSL", "Fiber optic", "No"]
@@ -231,9 +214,7 @@ VALID_PAYMENT = [
 ]
 
 
-# -------------------------
 # INPUT SCHEMA
-# -------------------------
 
 class CustomerInput(BaseModel):
     UserId: Optional[str] = Field(default=None, description="Optional routing key for deterministic canary")
@@ -258,9 +239,7 @@ class CustomerInput(BaseModel):
     PaymentMethod: str
 
 
-# -------------------------
 # ENCODING (MATCH TRAINING CONTRACT)
-# -------------------------
 
 def encode_raw_input(user: Dict[str, Any], features: list[str], model_version: str) -> pd.DataFrame:
     if user["Contract"] not in VALID_CONTRACTS:
@@ -303,9 +282,7 @@ def encode_raw_input(user: Dict[str, Any], features: list[str], model_version: s
     return df[features].astype(float)
 
 
-# -------------------------
 # ROUTES
-# -------------------------
 
 @app.get("/health")
 def health():

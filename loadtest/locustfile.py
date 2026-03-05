@@ -8,13 +8,11 @@ _df = pd.read_csv(DATA_PATH)
 if "Churn" in _df.columns:
     _df = _df.drop(columns=["Churn"])
 
-# Convert once (fast). Avoid per-request pandas sampling overhead.
+
 _ROWS = _df.to_dict(orient="records")
 N = len(_ROWS)
 
 def row_to_payload(row: dict) -> dict:
-    # Your dataset DOES NOT have raw strings (Contract/InternetService/PaymentMethod)
-    # It has one-hot columns. So we must reconstruct strings.
     # InternetService
     if int(row.get("InternetService_No", 0)) == 1:
         internet = "No"
@@ -31,7 +29,7 @@ def row_to_payload(row: dict) -> dict:
     else:
         contract = "Month-to-month"
 
-    # PaymentMethod (your CSV column names have parentheses)
+    # PaymentMethod
     if int(row.get("PaymentMethod_Credit_card_(automatic)", 0)) == 1:
         pay = "Credit card (automatic)"
     elif int(row.get("PaymentMethod_Electronic_check", 0)) == 1:

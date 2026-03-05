@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+    
+
 
 BASE_DIR = "/opt/airflow"
 DATA_PATH = f"{BASE_DIR}/data/Telecom_processed.csv"
@@ -13,7 +15,7 @@ BASELINE_DIR = f"{BASE_DIR}/monitoring/baseline"
 
 DEFAULT_ROUTING = {"stable": 80, "candidate": 20}
 
-# ---- helpers ----
+
 
 def _load_manifest() -> dict:
     with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
@@ -42,7 +44,7 @@ def _next_version() -> str:
     return f"v{n}"
 
 
-# ---- tasks ----
+
 
 def extract_data(**context):
     import pandas as pd
@@ -142,17 +144,17 @@ def publish_candidate(**context):
 
     context["ti"].xcom_push(key="new_version", value=new_version)
 
-    # model.json
+    
     model_out = os.path.join(new_dir, "model.json")
     with open(tmp_model_path, "rb") as src, open(model_out, "wb") as dst:
         dst.write(src.read())
 
-    # signature.json
+   
     sig_out = os.path.join(new_dir, "signature.json")
     signature = {"features": feature_names}
     _atomic_write_json(sig_out, signature)
 
-    # manifest update (THIS MUST BE HERE)
+    
     m = _load_manifest()
     if not m.get("stable_version"):
         raise ValueError("manifest.json missing stable_version")
@@ -170,7 +172,6 @@ def create_baseline(**context):
     Baseline = training feature distribution for PSI comparisons.
     Output: /opt/airflow/monitoring/baseline/{version}_baseline.csv
     """
-    import pandas as pd
 
     new_version = context["ti"].xcom_pull(key="new_version", task_ids="publish_candidate")
     feature_names = context["ti"].xcom_pull(key="feature_names", task_ids="train_model")
@@ -216,7 +217,7 @@ with DAG(
     dag_id="churn_train_eval_publish_candidate",
     default_args=default_args,
     start_date=datetime(2024, 1, 1),
-    schedule=None,   # Airflow 2.4+ prefers schedule over schedule_interval
+    schedule=None,   
     catchup=False,
     tags=["churn", "mlops"],
 ) as dag:

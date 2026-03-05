@@ -39,9 +39,6 @@ MAX_PSI_AGE_MULTIPLIER = 2.0
 REQUIRE_PSI_WINDOW_MATCH = True
 
 
-# -------------------------
-# UTIL
-# -------------------------
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -76,9 +73,7 @@ def save_manifest(m: Dict[str, Any]) -> None:
     atomic_write_json(MANIFEST_PATH, m)
 
 
-# -------------------------
 # LOCK
-# -------------------------
 
 def _read_lock_meta() -> Optional[dict]:
     if not os.path.exists(LOCK_PATH):
@@ -115,10 +110,7 @@ def release_manifest_lock() -> None:
     except Exception:
         pass
 
-
-# -------------------------
 # VALIDATION
-# -------------------------
 
 def model_artifacts_exist(version: str) -> Tuple[bool, str]:
     vdir = os.path.join(MODELS_DIR, version)
@@ -210,9 +202,7 @@ def psi_status(report: Dict[str, Any]) -> str:
     return "OK"
 
 
-# -------------------------
 # TRAFFIC
-# -------------------------
 
 def count_traffic_bounded(window_minutes: int = TRAFFIC_WINDOW_MINUTES) -> Counter:
     c = Counter()
@@ -257,19 +247,15 @@ def count_traffic_bounded(window_minutes: int = TRAFFIC_WINDOW_MINUTES) -> Count
     return c
 
 
-# -------------------------
+
 # AUDIT
-# -------------------------
 
 def append_audit_log(entry: dict) -> None:
     os.makedirs(os.path.dirname(AUDIT_LOG_PATH), exist_ok=True)
     with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-
-# -------------------------
 # MAIN
-# -------------------------
 
 def main():
     acquire_manifest_lock()
@@ -283,7 +269,6 @@ def main():
             print("NOT PROMOTED: manifest missing stable_version")
             return
 
-        # clean exit if no candidate
         if cand is None:
             print("NOT PROMOTED: candidate_version is null")
             return
@@ -366,7 +351,6 @@ def main():
         m["routing"] = {"stable": 100, "candidate": 0}
         m["last_promotion_utc"] = utc_now_iso()
 
-        # move candidate metrics to stable metrics (optional but clean)
         if "candidate_metrics" in m:
             m["stable_metrics"] = m.get("candidate_metrics")
             m.pop("candidate_metrics", None)
